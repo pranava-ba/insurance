@@ -1,9 +1,9 @@
-matplotlib
-numpy
-pandas
-seaborn
-streamlit==1.35.0
+matplotlib>=3.9.0
+numpy>=2.0.0
+pandas>=2.2.0
+seaborn>=0.13.0
+streamlit>=1.35.0
 altair>=5.0.0
-python-docx
-scipy
-openpyxl
+python-docx>=1.1.0
+scipy>=1.13.0
+openpyxl>=3.1.0
