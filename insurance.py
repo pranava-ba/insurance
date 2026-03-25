@@ -1,16 +1,17 @@
 """
 Insurance Churn - Confirmatory Data Analysis (CDA) Streamlit App
 =================================================================
-Requires: streamlit, pandas, numpy, scipy, pingouin, matplotlib,
-          seaborn, python-docx, openpyxl
+Requires: streamlit, pandas, numpy, scipy, matplotlib, seaborn, 
+          python-docx, openpyxl, tabulate
 """
 
 import io
 import re
 import textwrap
-import warnings
+#import warnings
 
-
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -24,7 +25,7 @@ from scipy.stats import (
     chi2_contingency, mannwhitneyu, f_oneway,
     pearsonr, spearmanr, shapiro, levene
 )
-warnings.filterwarnings("ignore")
+#warnings.filterwarnings("ignore")
 
 # ─────────────────────────────────────────────
 # PAGE CONFIG
@@ -74,6 +75,15 @@ def infer_variable_types(df):
     return cats, conts
 
 
+def _safe_to_markdown(df_obj):
+    """Safely convert DataFrame to markdown table string with fallback."""
+    try:
+        return df_obj.to_markdown(index=True)
+    except Exception:
+        # Fallback: simple string representation if tabulate not installed
+        return df_obj.to_string()
+
+
 def run_analysis(question: str, df: pd.DataFrame):
     """
     Parse the research question and select the appropriate statistical test.
@@ -95,7 +105,8 @@ def run_analysis(question: str, df: pd.DataFrame):
                 mentioned.append(col)
 
     # deduplicate preserving order
-    seen = set(); mentioned = [x for x in mentioned if not (x in seen or seen.add(x))]
+    seen = set()
+    mentioned = [x for x in mentioned if not (x in seen or seen.add(x))]
 
     result = {
         "question": question,
@@ -135,7 +146,7 @@ def run_analysis(question: str, df: pd.DataFrame):
                     f"**Test:** Chi-Square (χ²) Test of Independence  \n"
                     f"**χ² statistic** = {chi2:.4f}  \n"
                     f"**Degrees of freedom** = {dof}  \n"
-                    f"**Contingency Table:**\n{ct.to_markdown()}"
+                    f"**Contingency Table:**\n{_safe_to_markdown(ct)}"
                 ),
                 "sig_level": (
                     f"**Level of significance (α)** = {ALPHA}  \n"
@@ -194,7 +205,12 @@ def run_analysis(question: str, df: pd.DataFrame):
                     }
                 else:
                     result["test_name"] = "Mann-Whitney U Test (non-parametric)"
-                    u_stat, p = mannwhitneyu(g1, g2, alternative="two-sided")
+                    # Use try-except for scipy version compatibility
+                    try:
+                        u_stat, p = mannwhitneyu(g1, g2, alternative="two-sided")
+                    except TypeError:
+                        # Fallback for older scipy versions without 'alternative' param
+                        u_stat, p = mannwhitneyu(g1, g2)
                     result["steps"] = {
                         "H0": f"There is NO significant difference in **{cont_col}** between the groups of **{cat_col}**.",
                         "H1": f"There IS a significant difference in **{cont_col}** between the groups of **{cat_col}**.",
@@ -276,7 +292,11 @@ def run_analysis(question: str, df: pd.DataFrame):
                 result["test_name"] = "Pearson Correlation"
                 r, p = pearsonr(data[c1], data[c2])
                 n = len(data)
-                t_stat = r * np.sqrt(n - 2) / np.sqrt(1 - r**2)
+                # Handle edge case where |r| ≈ 1 to avoid division by zero
+                if abs(r) >= 1.0 - 1e-10:
+                    t_stat = np.sign(r) * 1e10  # Very large finite number for display
+                else:
+                    t_stat = r * np.sqrt(n - 2) / np.sqrt(1 - r**2)
                 dof = n - 2
                 critical = stats.t.ppf(1 - ALPHA / 2, dof)
                 result["steps"] = {
@@ -467,7 +487,11 @@ if upload:
             st.markdown(f"- 🗂 Categorical variables ({len(cats)}): {', '.join(cats)}")
             st.markdown(f"- 📈 Continuous variables ({len(conts)}): {', '.join(conts)}")
             st.markdown(f"- 🎯 Target variable: **Churn** (0 = stayed, 1 = churned)")
-            st.markdown(f"- Churn rate: **{df['Churn'].mean()*100:.1f}%**")
+            # Check if Churn column exists before accessing
+            if 'Churn' in df.columns:
+                st.markdown(f"- Churn rate: **{df['Churn'].mean()*100:.1f}%**")
+            else:
+                st.markdown("- ⚠️ 'Churn' column not found in dataset")
 
 # ═══════════════════════════════════════════
 # STEP 2 – CONFIGURE QUESTIONS
@@ -555,9 +579,9 @@ if st.session_state.df is not None:
             for key, (num, label) in step_labels.items():
                 text = res["steps"].get(key, "")
                 st.markdown(f"**Step {num} – {label}**")
-                # colour decision box
+                # colour decision box - case-insensitive check
                 if key == "decision":
-                    if "reject the null" in text and "fail to" not in text:
+                    if "reject the null" in text.lower() and "fail to" not in text.lower():
                         st.markdown(
                             f'<div class="result-card"><span class="reject">🔴 {text}</span></div>',
                             unsafe_allow_html=True,
@@ -572,7 +596,8 @@ if st.session_state.df is not None:
                 st.markdown("")
 
             if res.get("fig_bytes"):
-                st.image(res["fig_bytes"], use_column_width=False, width=650)
+                # Fixed: use_container_width instead of deprecated use_column_width
+                st.image(res["fig_bytes"], use_container_width=False, width=650)
 
         # ── DOWNLOAD BUTTON ──
         st.markdown("---")
