@@ -1,11 +1,8 @@
-io
-re
-textwrap
-warnings
 matplotlib
 numpy
-pandas 
-seaborn 
+pandas
+seaborn
 streamlit
-docx
+python-docx
 scipy
+openpyxl
