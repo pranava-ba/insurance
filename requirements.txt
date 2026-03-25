@@ -2,8 +2,8 @@ matplotlib
 numpy
 pandas
 seaborn
-streamlit==1.22.0
-altair==4.2.2
+streamlit==1.35.0
+altair>=5.0.0
 python-docx
 scipy
 openpyxl
