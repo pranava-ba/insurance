@@ -1,0 +1,11 @@
+io
+re
+textwrap
+warnings
+matplotlib
+numpy
+pandas 
+seaborn 
+streamlit
+docx
+scipy
